@@ -4,6 +4,7 @@
  */
 
 #include <JointInterface.h>
+#include <yarp/os/LogStream.h>
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////
  //                                       Constructor                                              //
@@ -77,11 +78,9 @@ bool JointInterface::read_encoders(Eigen::VectorXd &pos, Eigen::VectorXd &vel)
 {
 	if(pos.size() != this->numJoints or vel.size() != this->numJoints)
 	{
-		std::cerr << "[ERROR] [JOINT INTERFACE] read_encoders(): "
-		          << "There are " << this->numJoints << " joints, but "
+		yError() << "[JointInterface::read_encoders] There are " << numJoints << " joints, but "
 		          << "the position argument had " << pos.size() << " elements and "
-		          << "the velocity argument had " << vel.size() << " elements.\n";
-
+		          << "the velocity argument had " << vel.size() << " elements";
 		return false;
 	}
 	else
@@ -103,9 +102,7 @@ bool JointInterface::read_encoders(Eigen::VectorXd &pos, Eigen::VectorXd &vel)
 		}
 		else
 		{
-			std::cerr << "[ERROR] [JOINT INTERFACE] read_encoders(): "
-			             "Could not obtain new encoder values.\n";
-			
+			yError() << "[JointInterface::read_encoders] Could not obtain new encoder values";
 			return false;
 		}
 	}
@@ -116,21 +113,16 @@ bool JointInterface::read_encoders(Eigen::VectorXd &pos, Eigen::VectorXd &vel)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 bool JointInterface::send_joint_commands(const Eigen::VectorXd &commands)
 {
-	
-
 	for(int i = 0; i < commands.size(); i++)
 	{
 		if(not this->pController->setPosition(i,commands[i]*180.0/M_PI))
 		{
-			std::cerr << "[ERROR] [JOINT INTERFACE] send_joint_commands(): "
-						<< "Could not send a command for joint " << i << ".\n";
-			
+			yError() << "[JointInterface::send_joint_commands] Could not send a command for joint: " << i;	
 			return false;
 		}
 	}
-	
+
 	return true;
-	
 }
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////

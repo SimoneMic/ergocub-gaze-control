@@ -180,17 +180,13 @@ bool GazeControl::update_state()
 		}
 		else
 		{
-			std::cerr << "[ERROR] [ICUB BASE] update_state(): "
-				  << "Could not set state for the iDynTree::iKinDynComputations object." << std::endl;
-				  
+			yError() << "[GazeControl::update_state] Could not set state for the iDynTree::iKinDynComputations object";
 			return false;
 		}
 	}
 	else
 	{
-		std::cerr << "[ERROR] [ICUB BASE] update_state(): "
-			  << "Could not update state from the JointInterface class." << std::endl;
-			  
+		yError() << "[GazeControl::update_state] Could not update state from the JointInterface class";	  
 		return false;
 	}
 }
@@ -233,11 +229,7 @@ bool GazeControl::set_gaze(const Eigen::Vector3d& desiredGaze)
 	}
 	catch(std::exception &exception)
 	{
-		std::cerr << "[ERROR] [ICUB BASE] move_to_poses(): "
-		          << "Unable to set new Cartesian trajectories.\n";
-		
-		std::cout << exception.what() << std::endl;
-
+		yError() << "[GazeControl::set_gaze] Unable to set new Cartesian trajectories: " << exception.what();
 		return false;
 	}
 	return true;
@@ -294,8 +286,7 @@ bool GazeControl::set_cartesian_gains(const double &proportional)
 {
 	if(proportional < 0)
 	{
-		std::cerr << "[ERROR] [ICUB BASE] set_cartesian_gains(): "
-		          << "Gains must be positive, but your inputs was " << proportional << ".\n";
+		yError() << "[GazeControl::set_cartesian_gains] Gains must be positive, but the inputs was: " << proportional;
 		return false;
 	}
 	else{
@@ -311,10 +302,8 @@ bool GazeControl::set_joint_gains(const double &proportional, const double &deri
 {
 	if(proportional < 0 or derivative < 0)
 	{
-		std::cerr << "[ERROR] [ICUB BASE] set_joint_gains(): "
-		          << "Gains must be positive, but your inputs were " << proportional
-		          << " and " << derivative << ".\n";
-		          
+		yError() << "[GazeControl::set_joint_gains] Gains must be positive, but the inputs were for the proportional: " << proportional
+				<< " and " << derivative;         
 		return false;
 	}
 	else
@@ -409,7 +398,7 @@ void GazeControl::run()
 		}
 		catch(const char* error_message)
 		{
-			std::cout << error_message << std::endl;
+			yError() << "[GazeControl::run] Caught unexpected exception while solving the joint motion: " << error_message;
 			dq.setZero();
 		}
 
@@ -430,7 +419,7 @@ void GazeControl::run()
 		point2.addFloat64(this->qRef(2));
 		point2.addFloat64(this->qRef(3));
 
-	this->m_debugPort.write();
+		this->m_debugPort.write();
 
 		this->qRef += dq * m_sample_time;
 		
@@ -440,13 +429,11 @@ void GazeControl::run()
 	bool error_check = false;	
 	for(int i = 0; i < this->m_numControlledJoints; i++){
 		if (!error_check && ((this->qRef[i] * 180.0 / M_PI ) - (this->m_q[i] * 180.0 / M_PI) > 10 )){
-			//throw std::runtime_error("Requested joint motion for joint " +  std::to_string(i) + "is greater than 10 degrees.");
 			yError("Requested joint motion for joint %i is greater than 10 degrees.", i);
 			error_check = true;
 		}
 			
 		if (!error_check && ((this->qRef[i] * 180.0 / M_PI ) - (this->m_q[i] * 180.0 / M_PI) < -10)){
-			//throw std::runtime_error("Requested joint motion for joint " +  std::to_string(i) + "is greater than 10 degrees.");
 			yError("Requested joint motion for joint %i is greater than 10 degrees.", i);
 			error_check = true;
 		}
@@ -466,10 +453,7 @@ bool GazeControl::compute_joint_limits(double &lower, double &upper, const unsig
 	
 	if(jointNum > this->m_numJoints)
 	{
-		std::cerr << "[ERROR] [POSITION CONTROL] compute_joint_limits(): "
-		          << "Range of joint indices is 0 to " << this->m_numJoints - 1 << ", "
-		          << "but you called for " << jointNum << ".\n";
-
+		yError() << "[GazeControl::compute_joint_limits] Range of joint indices is 0 to " << m_numJoints - 1 << " but you called for " << jointNum;
 		return false;
 	}
 	else
@@ -480,10 +464,7 @@ bool GazeControl::compute_joint_limits(double &lower, double &upper, const unsig
 		
 		if(lower >= upper)
 		{
-			std::cerr << "[ERROR] [POSITION CONTROL] compute_joint_limits(): "
-				  << "Lower limit " << lower << " is greater than upper limit " << upper << ". "
-				  << "How did that happen???\n";
-			
+			yError() << "[GazeControl::compute_joint_limits] Lower limit " << lower << " is greater than upper limit " << upper;
 			return false;
 		}
 		else	return true;
