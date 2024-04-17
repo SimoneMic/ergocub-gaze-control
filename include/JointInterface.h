@@ -27,6 +27,8 @@ class JointInterface
 		bool read_encoders(Eigen::VectorXd &pos, Eigen::VectorXd &vel);                     // Read the positions and velocities
 		
 		bool send_joint_commands(const Eigen::VectorXd &commands);
+
+		bool send_joint_commands_degrees(const Eigen::VectorXd &commands);
 		
 		void close();                                                                       // Close the device drivers & stop the robot
 				std::vector<std::array<double,2>> positionLimit;                            // Upper and lower bounds on joint position

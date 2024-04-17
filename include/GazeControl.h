@@ -63,6 +63,13 @@ class GazeControl: public yarp::os::PeriodicThread
 
         bool m_initialized;
 
+        // Utility to convert radians to degrees
+        double to_degrees(double &rad);
+
+        template <typename T> int sgn(T val) {
+            return (T(0) < val) - (val < T(0));
+        }
+
     protected:
         // Kinematics & dynamics
 		Eigen::VectorXd m_q, m_qdot;                 // Joint positions and velocities
@@ -100,6 +107,10 @@ class GazeControl: public yarp::os::PeriodicThread
 
         void run() override;
         // double getPeriod() override;	
+
+        bool home_gaze();
+
+        bool sweep_gaze(const bool &direction_left, const double &camera_tilt_angle);
 };
 
 #endif

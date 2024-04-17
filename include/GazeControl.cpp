@@ -53,7 +53,6 @@ bool GazeControl::configure(yarp::os::ResourceFinder &rf)
 				m_jointList[i] = tmp_bottle->get(i).asString();
 				yDebug() << "[GazeControl::configure] Controlling joint: " << m_jointList[i];
 			}
-			m_numControlledJoints = m_jointList.size();
         }
 		else
 		{	// Using default ones
@@ -63,6 +62,16 @@ bool GazeControl::configure(yarp::os::ResourceFinder &rf)
 			{
 				yDebug() << "[GazeControl::configure] Controlling joint: " << m_jointList[i];
 			}
+		}
+
+		if (config_prop.check("controlled_joints_number"))
+		{
+			m_numControlledJoints = config_prop.find("controlled_joints_number").asInt32();
+		}
+		else
+		{
+			yWarning() << "[GazeControl::configure] controlled_joints_number not found in config. Using default";
+			m_numControlledJoints = 4;	// hardcode to the first 4: neck RPY and camera
 		}
 		yDebug() << "[GazeControl::configure] Number of controlled joints: " << m_numControlledJoints;
 		
@@ -161,10 +170,10 @@ bool GazeControl::update_state()
 		                                iDynTree::Vector3(std::vector<double> {0.0, 0.0, -9.81}))) // Direction of gravity
 		{
 			// Get the camera Jacobian
-			Eigen::MatrixXd temp(6,6+this->m_numJoints);                                  // Temporary storage
+			Eigen::MatrixXd temp(6, 6 + this->m_numJoints);                                  // Temporary storage
 			
-			this->m_computer.getFrameFreeFloatingJacobian("realsense_rgb_frame",temp);    // Compute camera Jacobian "realsense_rgb_frame"  "eyes_tilt_frame"
-			this->m_J_R = temp.middleCols(6,this->m_numControlledJoints);                             // Remove floating base and torso
+			this->m_computer.getFrameFreeFloatingJacobian("realsense_rgb_frame", temp);    // Compute camera Jacobian "realsense_rgb_frame"  "eyes_tilt_frame"
+			this->m_J_R = temp.middleCols(6, this->m_numControlledJoints);                             // Remove floating base and torso
 			
             // Update camera pose
 			this->m_cameraPose  = iDynTree_to_Eigen(this->m_computer.getWorldTransform("realsense_rgb_frame"));  // realsense_rgb_frame  "eyes_tilt_frame"
@@ -325,6 +334,62 @@ void GazeControl::set_motor_actuation(const bool enabled)
 // 	return this->sample_time;
 // }
 
+bool GazeControl::home_gaze()
+{
+	try
+	{
+		this->suspend();
+
+		// Read actual position in joint space in rad
+		Eigen::VectorXd enc_position, enc_vel;
+		m_jointInterface->read_encoders(enc_position, enc_vel);
+		// Move all the joints of the neck and camera to 0
+		Eigen::VectorXd setpoints;
+		int max_iterations = 0;
+		double max_speed = 45;	// degrees per second
+		double step = max_speed * m_sample_time;	// degrees done each iteration
+		// Find the maximum iteration number to bring the joints to 0 with the current sampling time
+		for (size_t i = 0; i < enc_position.size() - 1; ++i)
+		{
+			auto tmp = std::abs(to_degrees(enc_position[0]) / max_speed / m_sample_time);
+			if (tmp > max_iterations)
+			{
+				max_iterations = tmp;
+			}
+		}
+
+		// Now control the joints for each step until zero position is reached
+		for (size_t i = 0; i < max_iterations - 1; ++i)
+		{
+			m_jointInterface->read_encoders(enc_position, enc_vel);
+			for (size_t j = 0; j < enc_position.size() - 1; ++j)
+			{
+				if (std::abs(enc_position[j]) < step)	// We are already too close to 0.0
+				{
+					setpoints[j] = 0.0;
+				}
+				else
+				{
+					setpoints[j] = enc_position[j]  - sgn(enc_position[j]) * step;	// decrease the current position by the fixed step
+
+					if (sgn(setpoints[j]) != sgn(enc_position[j]))	// if I am overshooting the 0, clamp the setpoint (should be already caught by the first if)
+					{
+						setpoints[j] = 0.0;
+					}
+				}
+				yDebug() << "[GazeControl::home_gaze] Setting setpoint of joint " << j << " to: " << setpoints[j];
+			}
+
+			m_jointInterface->send_joint_commands_degrees(setpoints);
+			std::this_thread::sleep_for(std::chrono::milliseconds((int)(m_sample_time*1000)));
+		}
+	}
+	catch(const std::exception& e)
+	{
+		yError() << "[GazeControl::home_gaze] Got an exception: " << e.what() ;
+	}
+	return true;
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //                                     MAIN CONTROL LOOP                                          //
@@ -336,32 +401,19 @@ void GazeControl::run()
 		std::this_thread::sleep_for(std::chrono::milliseconds(int(m_sample_time * 1000)));
 		return;
 	}
-	
 
-	this->m_solver->clear_last_solution();                                                        // In the QP solver
-	update_state();                                                                             // Update kinematics & dynamics for new control loop
+	this->m_solver->clear_last_solution();                         // In the QP solver
+	update_state();                                                // Update kinematics & dynamics for new control loop
 	
-	double elapsedTime = yarp::os::Time::now() - this->m_startTime;                               // Time since activation of control loop
+	double elapsedTime = yarp::os::Time::now() - this->m_startTime;              // Time since activation of control loop
 	
 	if(this->m_controlSpace == joint)
 	{
-		// Eigen::VectorXd qd(this->numJoints);
-		
-		// for(int i = 0; i < this->numJoints; i++)
-		// {
-		// 	qd(i) = this->jointTrajectory[i].evaluatePoint(elapsedTime);
-			
-		// 	if(qd(i) < this->jointInterface->positionLimit[i][0])
-		// 		qd(i) = this->jointInterface->positionLimit[i][0] + 0.001;              // Just above the lower limit
-		// 	if(qd(i) > this->jointInterface->positionLimit[i][1])
-		// 		qd(i) = this->jointInterface->positionLimit[i][1] - 0.001;              // Just below the upper limit
-		// }
-		
-		// this->qRef = qd;                                                                    // Reference position for joint motors
+		//do nothing
 	}
 	else
 	{
-		Eigen::VectorXd dq(this->m_numControlledJoints);                                                        // We want to solve this
+		Eigen::VectorXd dq(this->m_numControlledJoints);              // We want to solve this
 		Eigen::VectorXd q0(this->m_numControlledJoints);
 		
 		// Calculate instantaneous joint limits
@@ -517,4 +569,9 @@ bool GazeControl::threadInit()
 void GazeControl::threadRelease()
 {
 	// send_joint_commands(this->q);                                                               // Maintain current joint positions
+}
+
+double GazeControl::to_degrees(double &rad)
+{
+	return rad*180/M_PI;
 }

@@ -109,13 +109,27 @@ bool JointInterface::read_encoders(Eigen::VectorXd &pos, Eigen::VectorXd &vel)
 }
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////
- //                                 Send commands to the joint motors                              //
+ //                                 Send commands to the joint motors in rad                             //
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 bool JointInterface::send_joint_commands(const Eigen::VectorXd &commands)
 {
 	for(int i = 0; i < commands.size(); i++)
 	{
 		if(not this->pController->setPosition(i,commands[i]*180.0/M_PI))
+		{
+			yError() << "[JointInterface::send_joint_commands] Could not send a command for joint: " << i;	
+			return false;
+		}
+	}
+
+	return true;
+}
+
+bool JointInterface::send_joint_commands_degrees(const Eigen::VectorXd &commands)
+{
+	for(int i = 0; i < commands.size(); i++)
+	{
+		if(not this->pController->setPosition(i,commands[i]))
 		{
 			yError() << "[JointInterface::send_joint_commands] Could not send a command for joint: " << i;	
 			return false;
