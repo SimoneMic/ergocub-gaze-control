@@ -51,38 +51,21 @@ private:
 };
 
 int main(int argc, char *argv[]){
-    std::string config_file = "config.ini";
+    yarp::os::Network yarp(yarp::os::YARP_CLOCK_SYSTEM);
+	yarp::os::ResourceFinder rf;
+	rf.configure(argc, argv);
+
+	GazeControl gazeControl;  
+	if (! gazeControl.configure(rf))
+	{
+		yError() << "[ergocub-gaze-control] [server.cpp] Unable to configure gazeControl in main";
+		return -1;
+	}
     
-    if (argc == 2){
-        config_file = argv[1];
-    }
+    gazeControl.set_cartesian_gains(0.01);
+    gazeControl.start();
 
-    yarp::os::Property prop;
-    prop.fromConfigFile(config_file);
-
-    std::string pathToURDF = prop.find("urdf").asString();
-
-    auto joints = prop.findGroup("joints");
-    std::vector<std::string> jointList;
-    for (int i=1; i < joints.size(); i++)
-        jointList.push_back(joints.get(i).asString());
-
-    
-    auto ports = prop.findGroup("ports");
-    std::vector<std::string> portList;
-    for (int i=1; i < ports.size(); i++)
-        portList.push_back(ports.get(i).asString());
-
-    double sample_time = prop.find("sample_time").asFloat64();
-    double numControlledJoints = prop.find("controlled_joints").asFloat64();
-
-    yarp::os::Network yarp;
-
-    GazeControl gazeController(pathToURDF, jointList, portList, numControlledJoints, sample_time);
-    gazeController.set_cartesian_gains(0.01);
-    gazeController.start();
-
-    RPCServer server(&gazeController);
+    RPCServer server(&gazeControl);
 
     if (!server.open()) {
         return 1;

@@ -38,67 +38,81 @@ double mass = 0.1;
 Eigen::Matrix<double,3,3> inertia = (Eigen::MatrixXd(3,3) << 1e-06,   0.0,   0.0,
                                                                0.0, 1e-06,   0.0,
                                                                0.0,   0.0, 1e-06).finished();
-		                      
 
-  ///////////////////////////////////////////////////////////////////////////////////////////////////
- //                                              Main                                             //
-///////////////////////////////////////////////////////////////////////////////////////////////////
+
 int main(int argc, char *argv[])
 {
-	// Ensure correct number of arguments
-	if(argc != 3)
+	yarp::os::Network yarp(yarp::os::YARP_CLOCK_SYSTEM);
+	yarp::os::ResourceFinder rf;
+	rf.configure(argc, argv);
+
+	GazeControl gazeControl;  
+	if (! gazeControl.configure(rf))
 	{
-		std::cerr << "[ERROR] [ERGOCUB GRASP DEMO] Path to URDF, and port name are required. "
-                          << "Usage: './ergocub_grasp_demo /portName /path/to/model.urdf' " << std::endl;
-                
-                return 1;                                                                           // Close with error
+		yError() << "[ergocub-gaze-control] Unable to configure gazeControl in main";
+		return -1;
 	}
-	else
-	{
-		std::string portName   = argv[1];
-		std::string pathToURDF = argv[2];
+	gazeControl.set_cartesian_gains(1);
 
-		// List of joints to control                                           
-		std::vector<std::string> jointList = {"neck_roll", "neck_pitch", "neck_yaw", "camera_tilt"};
-		
-		// List of ports to connect
-		std::vector<std::string> portList = {"/" + portName + "/head"};
+	// Configure communication across the yarp network
+	yarp::os::RpcServer port;                                                      // Create a port for sending / receiving info
+	double f = 0.5;
+	double A = 0.1;
+	Eigen::Vector3d root_to_camera = Eigen::Vector3d(0.074927, -0.011469, 1.523281 - 0.9);
 
-		// Sample time
-		double sample_time = 0.01;
-		// 
-		yarp::os::Network yarp;                                                       // First connect to the network
-		GazeControl gazeControl(pathToURDF, jointList, portList, sample_time);  
-		gazeControl.set_cartesian_gains(1);
-		
-		// Configure communication across the yarp network
-		yarp::os::RpcServer port;                                                      // Create a port for sending / receiving info
-		port.open("/GazeController/command");                                                  // Open the port with the name '/command'
-		yarp::os::Bottle input;                                                        // Store information from the user input
-		yarp::os::Bottle output;                                                       // Store information to send to the user
-		std::string command;                                                           // Response message, command from user
-		
-		// Run the control loop
-		bool active = true;
-
-		command = "look_at";
-
-		double f = 0.5;
-		double A = 0.1;
-		double t = 0;
-		Eigen::Vector3d root_to_camera = Eigen::Vector3d(0.074927, -0.011469, 1.523281 - 0.9);
-
-		while(active)
+	bool okCheck = rf.check("GAZE_CONTROL");
+    if (okCheck)
+    {
+		yarp::os::Searchable &config = rf.findGroup("GAZE_CONTROL");
+		if (config.check("rpc_local_name"))
 		{
-			double y = std::cos(2 * M_PI * f * t) * A;
-			double z = std::sin(2 * M_PI * f * t) * A;
-
-			gazeControl.set_gaze(Eigen::Vector3d(0.5, 0.0, z) + root_to_camera);
-			gazeControl.step();
-			std::this_thread::sleep_for(std::chrono::milliseconds(int(sample_time * 1000.0)));
-			t += 0.001;
+			port.open(config.find("rpc_local_name").asString());
 		}
-		
-		return 0;
+		else	// default value
+		{
+			port.open("/GazeController/command");             // Open the port with the name '/command'
+		}
+
+		if (config.check("f"))
+		{
+			f = config.find("f").asFloat64();
+		}
+		if (config.check("A"))
+		{
+			A = config.find("A").asFloat64();
+		}
+
+		if (config.check("root_to_camera_x") && config.check("root_to_camera_y") && config.check("root_to_camera_z"))
+		{
+			Eigen::Vector3d root_to_camera = Eigen::Vector3d(config.find("root_to_camera_x").asFloat64(),
+			 												 config.find("root_to_camera_y").asFloat64(),
+															 config.find("root_to_camera_z").asFloat64());
+		}
+		else
+		{
+			yWarning() << "[ergocub-gaze-control] unable to find one or more config for root_to_camera. Using defaults.";
+		}
 	}
+
+	//yarp::os::Bottle input;                                                        // Store information from the user input
+	//yarp::os::Bottle output;                                                       // Store information to send to the user
+	//std::string command;                                                           // Response message, command from user
+		
+	// Run the control loop
+	bool active = true;
+	double t = 0;
+	//command = "look_at";
+
+	while(active)
+	{
+		double y = std::cos(2 * M_PI * f * t) * A;
+		double z = std::sin(2 * M_PI * f * t) * A;
+
+		gazeControl.set_gaze(Eigen::Vector3d(0.5, 0.0, z) + root_to_camera);
+		gazeControl.step();
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+		t += 0.001;
+	}
+
+	return 0;
 }

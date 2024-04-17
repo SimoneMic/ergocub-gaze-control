@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)					                            # Minimum c
 
 project(ergocub-gaze-control
 	LANGUAGES CXX
-    VERSION 0.0.100)
+    VERSION 0.1.100)
 
 set(CMAKE_CXX_STANDARD 17)
 
@@ -29,7 +29,7 @@ include(AddUninstallTarget)
 ################################## Necessary packages to compile ###################################
 find_package(Eigen3 REQUIRED)
 find_package(iDynTree REQUIRED)                                                                     # Links below to iDynTree
-find_package(YARP 3.3.0 REQUIRED)                                                                   # Links below to ${YARP_LIBRARIES}
+find_package(YARP 3.9.0 REQUIRED)                                                                   # Links below to ${YARP_LIBRARIES}
 find_package(eCubGazeControllerInterface REQUIRED)
 
 #################################### Other files to be built #######################################
@@ -43,5 +43,11 @@ target_link_libraries(ergocub-gaze-control eCubGazeControllerInterface::eCubGaze
 #################################### Executables to be compiled ####################################
 add_executable(test src/test.cpp include/GazeControl.cpp include/JointInterface.cpp include/QPSolver.cpp)
 target_link_libraries(test eCubGazeControllerInterface::eCubGazeControllerInterface Eigen3::Eigen iDynTree::idyntree-high-level ${YARP_LIBRARIES})
+
+# install the config directory
+install(DIRECTORY
+  config
+  DESTINATION share/${PROJECT_NAME}
+)
 
 install(TARGETS ergocub-gaze-control DESTINATION bin) #test
