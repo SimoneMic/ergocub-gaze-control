@@ -10,6 +10,7 @@
 
 GazeControl::GazeControl():	m_initialized(false),
 						 	m_sample_time(0.01),
+							m_numJoints(6),
 						 	yarp::os::PeriodicThread(m_sample_time)		 	
 {
     //--------------------Default Parameters---------------------------
@@ -23,6 +24,7 @@ GazeControl::GazeControl():	m_initialized(false),
 	m_portList.resize(2);
 	m_portList[0] = "/ergocubSim/head";
 	m_portList[1] = "/ergocubSim/torso";
+	
 
 	this->m_solver = new QPSolver();
 };
@@ -48,7 +50,8 @@ bool GazeControl::configure(yarp::os::ResourceFinder &rf)
         {
 			auto tmp_bottle = config_prop.find("joint_list").asList();
 			m_jointList.resize(tmp_bottle->size());
-			for (size_t i = 0; i < tmp_bottle->size() - 1; ++i)
+			m_numJoints = m_jointList.size();
+			for (size_t i = 0; i < tmp_bottle->size(); ++i)
 			{
 				m_jointList[i] = tmp_bottle->get(i).asString();
 				yDebug() << "[GazeControl::configure] Controlling joint: " << m_jointList[i];
@@ -58,10 +61,11 @@ bool GazeControl::configure(yarp::os::ResourceFinder &rf)
 		{	// Using default ones
 			yWarning() << "[GazeControl::configure] Unable to find parameter: joint_list in config file. Using default one";
 
-			for (size_t i = 0; i < m_jointList.size() - 1; ++i)
+			for (size_t i = 0; i < m_jointList.size(); ++i)
 			{
 				yDebug() << "[GazeControl::configure] Controlling joint: " << m_jointList[i];
 			}
+			m_numJoints = m_jointList.size();
 		}
 
 		if (config_prop.check("controlled_joints_number"))
@@ -81,7 +85,7 @@ bool GazeControl::configure(yarp::os::ResourceFinder &rf)
         {
 			auto tmp_bottle = config_prop.find("port_list").asList();
 			m_portList.resize(tmp_bottle->size());
-			for (size_t i = 0; i < tmp_bottle->size() - 1; ++i)
+			for (size_t i = 0; i < tmp_bottle->size(); ++i)
 			{
 				m_portList[i] = tmp_bottle->get(i).asString();
 				yDebug() << "[GazeControl::configure] Using port: " << m_portList[i];
@@ -91,7 +95,7 @@ bool GazeControl::configure(yarp::os::ResourceFinder &rf)
 		{	// Using default ones
 			yWarning() << "[GazeControl::configure] Unable to find parameter: port_list in config file. Using default one";
 
-			for (size_t i = 0; i < m_portList.size() - 1; ++i)
+			for (size_t i = 0; i < m_portList.size(); ++i)
 			{
 				yDebug() << "[GazeControl::configure] Using port: " << m_portList[i];
 			}
@@ -108,18 +112,25 @@ bool GazeControl::configure(yarp::os::ResourceFinder &rf)
 		}
     }
 
-	m_q = Eigen::VectorXd::Zero(this->m_numJoints);				// Set the size of the position vector
-	m_qdot = Eigen::VectorXd::Zero(this->m_numJoints);			// Set the size of the velocity vector
+	yDebug() << "[GazeControl::configure] Setting control parameters";
+	m_q = Eigen::VectorXd::Zero(m_numJoints);				// Set the size of the position vector
+	m_qdot = Eigen::VectorXd::Zero(m_numJoints);			// Set the size of the velocity vector
 	m_J_R = Eigen::MatrixXd::Zero(6, m_numControlledJoints);	// Set the size of the Jacobian matrix (3 are the torso joint)
 	m_J = Eigen::MatrixXd::Zero(2, m_numControlledJoints);
 
+	yDebug() << "[GazeControl::configure] Setup joint interface with sizes: " << " m_q " << m_q.size() << " \n"
+				<< " m_qdot " << m_qdot << " \n" 
+				<< " m_J_R " << m_J_R.size() << " \n" 
+				<< " m_J " << m_J.size() ;
 	// Setup joint interface
 	this->m_jointInterface = new JointInterface(m_jointList, m_portList);
 
+	yDebug() << "[GazeControl::configure] Redundant Task with N joints: " << m_numControlledJoints;
 	// Redundant Task
 	m_redundantTask.resize(this->m_numControlledJoints);
 	m_redundantTask.setZero();
-	
+
+	yDebug() << "[GazeControl::configure] Load URDF";
 	// Load URDF
     iDynTree::ModelLoader loader;
 	
@@ -131,6 +142,7 @@ bool GazeControl::configure(yarp::os::ResourceFinder &rf)
 	// Successfully loaded urdf
     iDynTree::Model robot_model = loader.model();
 
+	yDebug() << "[GazeControl::configure] Load KinDynComputations robot model";
     // Now load the model in to the KinDynComputations class	    
 	if(! this->m_computer.loadRobotModel(robot_model))
 	{
@@ -150,7 +162,7 @@ bool GazeControl::configure(yarp::os::ResourceFinder &rf)
 }
 
 bool GazeControl::update_state()
-{
+{	
 	if(this->m_jointInterface->read_encoders(this->m_q, this->m_qdot))
 	{		
 		// Put data in iDynTree class to compute in
@@ -484,13 +496,16 @@ void GazeControl::run()
 			yError("Requested joint motion for joint %i is greater than 10 degrees.", i);
 			error_check = true;
 		}
-			
+
 		if (!error_check && ((this->qRef[i] * 180.0 / M_PI ) - (this->m_q[i] * 180.0 / M_PI) < -10)){
 			yError("Requested joint motion for joint %i is greater than 10 degrees.", i);
 			error_check = true;
 		}
 	}
 
+	//if ( m_motors_enabled){
+	//	this->m_jointInterface->send_joint_commands(this->qRef);
+	//}
 	if (!error_check && m_motors_enabled){
 		this->m_jointInterface->send_joint_commands(this->qRef);
 	}
