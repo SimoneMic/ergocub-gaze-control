@@ -8,6 +8,7 @@
 #include <yarp/os/Property.h>
 #include "eCubGazeControllerInterface/eCubGazeControllerInterface.h"
 #include "GazeControl.h"
+#include <filesystem> 
 
 class RPCServer: eCubGazeControllerInterface{
 public:
@@ -51,11 +52,21 @@ private:
 };
 
 int main(int argc, char *argv[]){
-    std::string config_file = "config.ini";
+    std::string config_file = "/usr/local/src/robot/hsp/ergocub-gaze-control/config/ecub_config.ini";
     
     if (argc == 2){
         config_file = argv[1];
     }
+    else
+    {
+        std::cerr << "[WARN] [ergocub-gaze-controller] wrong number of arguments passed: using default one: " << config_file << std::endl;
+        if (!std::filesystem::exists(config_file))
+        {
+            std::cerr << "[ERROR] [ergocub-gaze-controller] default file path: " << config_file << " not found." << std::endl;
+            return 1;
+        }
+    }
+    
 
     yarp::os::Property prop;
     prop.fromConfigFile(config_file);
