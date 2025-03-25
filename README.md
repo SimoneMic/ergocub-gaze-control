@@ -47,6 +47,18 @@ On the robot torso do:
 ergocub-gaze-controller /usr/local/src/robot/hsp/ergocub-gaze-control/config/ecub_config.ini
 ```
 
+## Troubleshooting
+If the ergocub-gaze-controller is not working and is giving you the error `Requested joint motion for joint %i is greater than 10 degrees` try doing the following:
+1) Close the controller.
+2) On the motorGUI set the mpdality of all the head motors from `Position Direct` ![Screenshot from 2025-03-25 16-02-00](https://github.com/user-attachments/assets/d9b273db-2080-4d69-b220-9926b24c3c04)
+ to `Position` ![Screenshot from 2025-03-25 16-07-03](https://github.com/user-attachments/assets/a389d807-dcc2-4dc2-9fc4-1558f76b1596) .
+   You should have this:
+   ![Screenshot from 2025-03-25 16-07-19](https://github.com/user-attachments/assets/cdd8fcde-3025-4076-95b4-5999c19b359c)
+
+
+4) Restart the ergocub-gaze-controller
+   
+
 # Running a demo in Gazebo
 
 1. Open a new terminal in Ubuntu with `ctrl + alt + t` and start the YARP server:
